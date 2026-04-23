@@ -1,12 +1,13 @@
 import re
+from dotenv import load_dotenv
+import os
 
 import pandas as pd
 import streamlit as st
 
-SHEET_CSV_URL = (
-    "https://docs.google.com/spreadsheets/d/"
-    "1VK1su96trBK9R1X4QzLlocmtGIRxpfCTWiLJ7qFc93M/export?format=csv"
-)
+load_dotenv
+
+SHEET_CSV_URL = os.getenv("SHEET_CSV_URL")
 
 COLUMN_ALIASES = {
     "date": ["Date", "Incident Date", "Event Date"],
