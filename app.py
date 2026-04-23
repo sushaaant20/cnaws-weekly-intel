@@ -521,6 +521,149 @@ def _render_executive_summary(summary_text):
     )
 
 
+def _render_key_takeaways(summary_metrics, expansion_analysis, tactical_shift, event_breakdown, district_breakdown):
+    inc_current = summary_metrics["incidents"]["current"]
+    inc_prev = summary_metrics["incidents"]["previous"]
+    ct_ops_change = tactical_shift.get("ct_ops_change", 0)
+    new_districts_count = expansion_analysis["new_districts"]
+
+    # Calculate % changes
+    inc_pct = ((inc_current - inc_prev) / max(inc_prev, 1)) * 100
+    ct_pct = ct_ops_change  # Already calculated in tactical_shift
+
+    bullets = []
+
+    # 1) EXPANSION BULLET
+    if new_districts_count > 0:
+        bullets.append(f"Geographic expansion into {new_districts_count} new district{'s' if new_districts_count > 1 else ''} signals significant widening of operational footprint")
+    else:
+        bullets.append("No geographic expansion observed, indicating a stable operational footprint")
+
+    # 2) TACTICAL BULLET
+    tactical_bullet = None
+    if not event_breakdown.empty:
+        # Filter where % Change > 20
+        significant_events = event_breakdown[event_breakdown["pct_change"] > 20]
+        if not significant_events.empty:
+            top_event = significant_events.sort_values(by="pct_change", ascending=False).iloc[0]
+            event_type = top_event["event_type"]
+            pct_val = top_event["pct_change"]
+
+            # Interpretation mapping
+            interpretation_map = {
+                "Targeted Violence": "selective engagements",
+                "Clashes": "direct engagements",
+                "Explosions": "stand-off attacks",
+                "CT Ops": "heightened state response",
+            }
+            interpretation = interpretation_map.get(event_type, "changing operational patterns")
+            tactical_bullet = f"{event_type} increased sharply (+{pct_val:.1f}%), indicating a shift toward {interpretation}"
+
+    if tactical_bullet is None:
+        tactical_bullet = "Operational patterns remained broadly stable without a dominant tactical shift"
+
+    bullets.append(tactical_bullet)
+
+    # 3) STATE RESPONSE BULLET
+    if ct_pct < 0:
+        bullets.append(f"Security force operations declined ({ct_pct:.1f}%), reducing operational pressure")
+    elif ct_pct > 0:
+        bullets.append(f"Security force operations increased (+{ct_pct:.1f}%), indicating heightened state response")
+    else:
+        bullets.append("Security force operations remained unchanged")
+
+    # 4) ACTIVITY BULLET
+    if inc_pct < 0:
+        bullets.append(f"Overall activity declined marginally ({inc_pct:.1f}%), suggesting a slowdown despite evolving dynamics")
+    else:
+        bullets.append(f"Overall activity increased ({inc_pct:.1f}%), indicating rising operational tempo")
+
+    # Render
+    with st.container(border=True):
+        st.markdown("<div class='section-label'>KEY TAKEAWAYS</div>", unsafe_allow_html=True)
+
+        # Join bullets with double newline for spacing
+        bullets_html = "\n\n".join(f"• {bullet}" for bullet in bullets)
+        st.markdown(bullets_html)
+
+
+def _render_state_response_analysis(summary_metrics, actor_metrics):
+    militant_incidents_current = summary_metrics["incidents"]["current"]
+    militant_incidents_prev = summary_metrics["incidents"]["previous"]
+    ct_ops_current = actor_metrics["ct_operations"]["current"]
+    ct_ops_prev = actor_metrics["ct_operations"]["previous"]
+
+    # STEP 1: Calculate metrics
+    ct_ratio_current = ct_ops_current / max(militant_incidents_current, 1)
+    ct_ratio_prev = ct_ops_prev / max(militant_incidents_prev, 1)
+    ct_pct = ((ct_ops_current - ct_ops_prev) / max(ct_ops_prev, 1)) * 100
+    militant_pct = ((militant_incidents_current - militant_incidents_prev) / max(militant_incidents_prev, 1)) * 100
+
+    # STEP 2: Determine dominance
+    if ct_ratio_current >= 1:
+        dominance = "strong state response"
+    elif ct_ratio_current >= 0.5:
+        dominance = "balanced engagement"
+    else:
+        dominance = "militant operational dominance"
+
+    # STEP 3: Determine trend
+    if ct_pct < -20:
+        trend = "declined significantly"
+    elif ct_pct > 20:
+        trend = "increased significantly"
+    else:
+        trend = "remained relatively stable"
+
+    # STEP 4: Build implication
+    if dominance == "militant operational dominance":
+        implication = "reduced state pressure relative to insurgent activity"
+    elif dominance == "balanced engagement":
+        implication = "ongoing contestation between state and militant forces"
+    else:
+        implication = "increased state pressure on militant networks"
+
+    # Build interpretation paragraph
+    interpretation_parts = [
+        f"Security force activity {trend}, with CT operations changing by {ct_pct:+.1f}%.",
+        f"The CT ratio ({ct_ratio_current:.1f}) indicates {dominance}, suggesting {implication}."
+    ]
+
+    if ct_pct < -20:
+        interpretation_parts.append("This dynamic may enable further geographic expansion if sustained.")
+
+    interpretation_text = " ".join(interpretation_parts)
+
+    # Render
+    with st.container(border=True):
+        st.markdown("<div class='section-label'>STATE RESPONSE ANALYSIS</div>", unsafe_allow_html=True)
+
+        # PART 1: TABLE
+        import pandas as pd
+        table_data = pd.DataFrame({
+            "Metric": ["Militant Incidents", "CT Operations", "CT Ratio"],
+            "Current": [
+                militant_incidents_current,
+                ct_ops_current,
+                f"{ct_ratio_current:.1f}"
+            ],
+            "Previous": [
+                militant_incidents_prev,
+                ct_ops_prev,
+                f"{ct_ratio_prev:.1f}"
+            ],
+            "Change": [
+                f"{militant_pct:+.1f}%",
+                f"{ct_pct:+.1f}%",
+                f"{((ct_ratio_current - ct_ratio_prev) / max(ct_ratio_prev, 0.01)) * 100:+.1f}%"
+            ]
+        })
+        st.dataframe(table_data, hide_index=True, use_container_width=True)
+
+        # PART 2: INTERPRETATION
+        st.markdown(f"<div class='shift-text'>{interpretation_text}</div>", unsafe_allow_html=True)
+
+
 def _render_map_legend():
     st.caption("Event Types")
     event_cols = st.columns(4)
@@ -639,18 +782,27 @@ report_context = _build_report_context(
 pdf_bytes = build_pdf_report(report_context)
 docx_bytes = build_docx_report(report_context)
 
-with st.container(border=True):
-    header_left, header_right = st.columns([0.68, 0.32], vertical_alignment="top")
+# ============================================================
+# SECTION 1: HEADER REDESIGN
+# ============================================================
+with st.container(border=False):
+    header_col1, header_col2, header_col3 = st.columns([1, 3, 1], vertical_alignment="center")
 
-    with header_left:
+    with header_col1:
         st.markdown(
-            "<div class='dashboard-title'>CNAWS Weekly Intelligence Dashboard</div>",
+            '<img src="https://cnaws.in/assets/logoblack-BZJsSCK0.png" width="120">',
             unsafe_allow_html=True,
         )
 
-    with header_right:
-        right_cols = st.columns(2)
-        with right_cols[0]:
+    with header_col2:
+        st.markdown(
+            "<h2 style='text-align:center;margin:0;color:#102a43;'>CNAWS Weekly Intelligence Dashboard</h2>",
+            unsafe_allow_html=True,
+        )
+
+    with header_col3:
+        export_cols = st.columns(2)
+        with export_cols[0]:
             st.download_button(
                 "Export PDF",
                 pdf_bytes,
@@ -658,7 +810,7 @@ with st.container(border=True):
                 mime="application/pdf",
                 use_container_width=True,
             )
-        with right_cols[1]:
+        with export_cols[1]:
             st.download_button(
                 "Export DOCX",
                 docx_bytes,
@@ -667,59 +819,167 @@ with st.container(border=True):
                 use_container_width=True,
             )
 
-    st.markdown(f"<div class='dashboard-window'>{escape(window_header)}</div>", unsafe_allow_html=True)
+# Horizontal divider
+st.markdown("""
+<hr style="height:1px; border:none; background-color:#1f3b57; margin-top:5px; margin-bottom:-2px;" />
+""", unsafe_allow_html=True)
 
-_section_title("Executive Summary")
-_render_executive_summary(executive_summary)
+st.markdown(f"<div class='dashboard-window'>{escape(window_header)}</div>", unsafe_allow_html=True)
 
-st.markdown("<div class='section-spacer'></div>", unsafe_allow_html=True)
-_section_title("Intelligence Score")
-_score_card(intelligence_score)
+st.markdown("<br>", unsafe_allow_html=True)
 
-st.markdown("<div class='section-spacer'></div>", unsafe_allow_html=True)
+# ============================================================
+# SECTION 2: TOP LAYOUT (Intelligence Score + Executive Summary)
+# ============================================================
+top_col1, top_col2 = st.columns([1.2, 1])
+
+with top_col1:
+    _section_title("Intelligence Score")
+    _score_card(intelligence_score)
+
+with top_col2:
+    _section_title("Executive Summary")
+    _render_executive_summary(executive_summary)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ============================================================
+# SECTION 3: SECOND ROW (Key Takeaways + State Response)
+# ============================================================
+row2_col1, row2_col2 = st.columns(2)
+
+with row2_col1:
+    _render_key_takeaways(
+        summary_metrics,
+        expansion_analysis,
+        tactical_shift,
+        event_breakdown,
+        district_breakdown,
+    )
+
+with row2_col2:
+    _render_state_response_analysis(
+        summary_metrics,
+        actor_metrics,
+    )
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ============================================================
+# SECTION 4: KPI CARDS ROW
+# ============================================================
 _section_title("Key Metrics")
-metric_cols = st.columns(5)
 
-with metric_cols[0]:
-    _metric_card(
+# SVG Icons
+SVG_INCIDENTS = '''<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="#1f3b57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>'''
+SVG_CASUALTIES = '''<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="#1f3b57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>'''
+SVG_INTENSITY = '''<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="#1f3b57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>'''
+SVG_DISTRICTS = '''<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="#1f3b57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 6-9 12-9 12S3 16 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'''
+SVG_NEW_DISTRICTS = '''<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="#1f3b57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16 8 14 14 8 16 10 10 16 8"/></svg>'''
+SVG_EXPANSION = '''<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="#1f3b57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>'''
+
+
+def _kpi_card(icon_svg, title, value, change_text, subtext, delta_value=0):
+    # Determine color based on delta
+    if delta_value < 0:
+        change_color = "#dc2626"
+    elif delta_value > 0:
+        change_color = "#16a34a"
+    else:
+        change_color = "#6b7280"
+
+    st.markdown(
+        f"""
+        <div style="
+            padding:16px;
+            border-radius:12px;
+            background:#f9fafb;
+            border:1px solid #eee;
+        ">
+            <div style="
+                width:40px;
+                height:40px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                background:#eef3f8;
+                border-radius:10px;
+                margin-bottom:10px;
+            ">
+                {icon_svg}
+            </div>
+            <div style="font-size:12px; color:#6b7280; font-weight:600;">{escape(title)}</div>
+            <div style="font-size:28px; font-weight:600; color:#1f2937;">{escape(value)}</div>
+            <div style="font-size:12px; color:{change_color}; font-weight:600;">
+                {escape(change_text)}
+            </div>
+            <div style="font-size:11px; color:#9ca3af;">
+                {escape(subtext)}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+kpi_cols = st.columns(6)
+
+with kpi_cols[0]:
+    _kpi_card(
+        SVG_INCIDENTS,
         "Incidents",
         _format_number(summary_metrics["incidents"]["current"]),
         f"{summary_metrics['incidents']['delta']:+,} vs previous",
         f"Previous: {_format_number(summary_metrics['incidents']['previous'])}",
         summary_metrics["incidents"]["delta"],
     )
-with metric_cols[1]:
-    _metric_card(
+with kpi_cols[1]:
+    _kpi_card(
+        SVG_CASUALTIES,
         "Casualties",
         _format_number(summary_metrics["casualties"]["current"]),
         f"{summary_metrics['casualties']['delta']:+,} vs previous",
         f"Previous: {_format_number(summary_metrics['casualties']['previous'])}",
         summary_metrics["casualties"]["delta"],
     )
-with metric_cols[2]:
-    _metric_card(
+with kpi_cols[2]:
+    _kpi_card(
+        SVG_INTENSITY,
         "Intensity",
         _format_number(summary_metrics["intensity"]["current"], 2),
         f"{summary_metrics['intensity']['delta']:+.2f} vs previous",
         f"Previous: {_format_number(summary_metrics['intensity']['previous'], 2)}",
         summary_metrics["intensity"]["delta"],
     )
-with metric_cols[3]:
-    _metric_card(
+with kpi_cols[3]:
+    _kpi_card(
+        SVG_DISTRICTS,
         "Districts",
         _format_number(summary_metrics["districts"]["current"]),
         f"{summary_metrics['districts']['delta']:+,} vs previous",
         f"Previous: {_format_number(summary_metrics['districts']['previous'])}",
         summary_metrics["districts"]["delta"],
     )
-with metric_cols[4]:
-    _metric_card(
-        "Expansion",
+with kpi_cols[4]:
+    _kpi_card(
+        SVG_NEW_DISTRICTS,
+        "New Districts",
         _format_number(expansion_analysis["new_districts"]),
-        f"Index {expansion_analysis['expansion_index']:.2f}",
+        f"{expansion_analysis['new_districts']:+,} new",
         f"Previous footprint: {expansion_analysis['previous_footprint']}",
         expansion_analysis["new_districts"],
     )
+with kpi_cols[5]:
+    _kpi_card(
+        SVG_EXPANSION,
+        "Expansion Index",
+        _format_number(expansion_analysis["expansion_index"], 2),
+        f"{expansion_analysis['expansion_index']:.2f}",
+        "Footprint expansion rate",
+        0,
+    )
+
+st.markdown("<br>", unsafe_allow_html=True)
 
 st.markdown("<div class='section-spacer'></div>", unsafe_allow_html=True)
 _section_title("Actor Separation")

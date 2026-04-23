@@ -5,9 +5,9 @@ import os
 import pandas as pd
 import streamlit as st
 
-load_dotenv
+load_dotenv()
 
-SHEET_CSV_URL = os.getenv("SHEET_CSV_URL")
+SHEET_CSV_URL = os.getenv("SHEET_CSV_URL") 
 
 COLUMN_ALIASES = {
     "date": ["Date", "Incident Date", "Event Date"],
