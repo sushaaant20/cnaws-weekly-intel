@@ -404,8 +404,6 @@ def compute_intelligence_score(summary_metrics, expansion_analysis, tactical_shi
 def generate_executive_summary(metrics, expansion, tactical):
     inc_current = metrics["inc_current"]
     inc_prev = metrics["inc_prev"]
-    cas_current = metrics["cas_current"]
-    cas_prev = metrics["cas_prev"]
     intensity_current = metrics["intensity_current"]
     intensity_prev = metrics["intensity_prev"]
     final_score = metrics["final_score"]
@@ -443,6 +441,20 @@ def generate_executive_summary(metrics, expansion, tactical):
         geo = "No geographic expansion was observed, indicating a stable operational footprint."
 
     ct_ops_change = tactical["ct_ops_change"]
+    tactical_change_values = [
+        abs(tactical.get("clashes_increase") or 0.0),
+        abs(tactical.get("explosions_increase") or 0.0),
+    ]
+    for key in ("top_increase", "top_decrease"):
+        event_shift = tactical.get(key)
+        if not event_shift:
+            continue
+        if event_shift.get("pct_change") is None:
+            tactical_change_values.append(100.0)
+        else:
+            tactical_change_values.append(abs(event_shift["pct_change"] * 100))
+
+    notable_tactical_shift = any(value > 30 for value in tactical_change_values)
     if ct_ops_change < -30:
         tactical_line = (
             "Security force operations declined sharply, indicating reduced operational pressure."
@@ -451,8 +463,38 @@ def generate_executive_summary(metrics, expansion, tactical):
         tactical_line = (
             "Security force operations increased significantly, suggesting a reactive posture."
         )
+    elif notable_tactical_shift:
+        tactical_line = "A notable tactical shift was observed in the current reporting window."
     else:
-        tactical_line = "Operational patterns remained relatively stable."
+        tactical_line = "No single tactical category materially altered the operating picture."
+
+    if incident_change is None:
+        activity_trend = "With overall activity newly recorded"
+    elif incident_change < 0:
+        activity_trend = "Despite a marginal decline in overall activity"
+    elif incident_change > 0:
+        activity_trend = "Alongside an increase in overall activity"
+    else:
+        activity_trend = "With overall activity unchanged"
+
+    if ct_ops_change < -30:
+        pressure_clause = "a sharp reduction in security operations"
+    elif ct_ops_change > 30:
+        pressure_clause = "a stronger security-force response"
+    else:
+        pressure_clause = "limited change in security operations"
+
+    if expansion["new_districts"] > 0:
+        expansion_clause = "expansion into new districts"
+        synthesis_effect = "increasing operational space for militant actors"
+    else:
+        expansion_clause = "no new geographic expansion"
+        synthesis_effect = "a constrained but still contested operating environment"
+
+    synthesis = (
+        f"{activity_trend}, {pressure_clause} and {expansion_clause} indicate "
+        f"{synthesis_effect}."
+    )
 
     if final_score > 60:
         outlook = "Overall risk remains high."
@@ -468,6 +510,7 @@ def generate_executive_summary(metrics, expansion, tactical):
         lethality,
         geo,
         tactical_line,
+        synthesis,
         "",
         outlook,
     ]

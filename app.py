@@ -465,6 +465,96 @@ def _build_comparison_chart(dataframe, category_column, title):
     return fig
 
 
+def _daily_activity_counts(dataframe, window, mask):
+    day_index = pd.date_range(
+        start=window["start"],
+        end=window["end"] - pd.Timedelta(days=1),
+        freq="D",
+    )
+    filtered = dataframe.loc[mask(dataframe)].copy()
+    if filtered.empty:
+        return [0] * len(day_index)
+
+    daily_counts = filtered.groupby(filtered["date"].dt.normalize()).size()
+    return daily_counts.reindex(day_index, fill_value=0).astype(int).tolist()
+
+
+def _build_operational_trend_chart(
+    df_current,
+    df_prev,
+    windows,
+    title,
+    mask,
+    current_color,
+    previous_color,
+):
+    day_labels = [f"Day {index}" for index in range(1, 8)]
+    current_counts = _daily_activity_counts(df_current, windows["current"], mask)
+    previous_counts = _daily_activity_counts(df_prev, windows["previous"], mask)
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=day_labels,
+            y=previous_counts,
+            mode="lines+markers",
+            name="Previous week",
+            line=dict(color=previous_color, width=3, shape="spline", dash="dash"),
+            marker=dict(size=7, color=previous_color),
+            hovertemplate="<b>%{x}</b><br>Previous week: %{y}<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=day_labels,
+            y=current_counts,
+            mode="lines+markers",
+            name="Current week",
+            line=dict(color=current_color, width=3, shape="spline"),
+            marker=dict(size=8, color=current_color),
+            hovertemplate="<b>%{x}</b><br>Current week: %{y}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=14, color="#102a43"), x=0, xanchor="left"),
+        height=300,
+        margin=dict(l=8, r=8, t=46, b=38),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Segoe UI, sans-serif", size=12, color="#334155"),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            font=dict(size=11, color="#64748b"),
+            bgcolor="rgba(0,0,0,0)",
+            borderwidth=0,
+        ),
+        hovermode="x unified",
+    )
+    fig.update_xaxes(
+        title=None,
+        tickfont=dict(size=10, color="#64748b"),
+        showgrid=False,
+        zeroline=False,
+        showline=False,
+        ticks="",
+    )
+    fig.update_yaxes(
+        title=dict(text="Incidents", font=dict(size=11, color="#94a3b8")),
+        tickfont=dict(size=10, color="#64748b"),
+        gridcolor="#e5e7eb",
+        gridwidth=1,
+        zeroline=False,
+        showline=False,
+        ticks="",
+        rangemode="tozero",
+    )
+    return fig
+
+
 def _render_html_table(columns, rows, table_height=None):
     header_html = "".join(f"<th>{escape(header)}</th>" for _, header in columns)
     body_rows = []
@@ -584,9 +674,14 @@ def _render_key_takeaways(summary_metrics, expansion_analysis, tactical_shift, e
 
     # 1) EXPANSION BULLET
     if new_districts_count > 0:
-        bullets.append(f"Geographic expansion into {new_districts_count} new district{'s' if new_districts_count > 1 else ''} signals significant widening of operational footprint")
+        bullets.append(
+            f"Geographic expansion into {new_districts_count} new district{'s' if new_districts_count > 1 else ''} "
+            "matters because it widens the militant operating footprint and stretches security-force coverage."
+        )
     else:
-        bullets.append("No geographic expansion observed, indicating a stable operational footprint")
+        bullets.append(
+            "No geographic expansion was observed, which matters because activity remains concentrated inside the existing operational footprint."
+        )
 
     # 2) TACTICAL BULLET
     tactical_bullet = None
@@ -604,31 +699,47 @@ def _render_key_takeaways(summary_metrics, expansion_analysis, tactical_shift, e
             pct_val = top_event["pct_change"]
 
             interpretation_map = {
-                "Targeted Violence": "selective engagements",
-                "Explosions": "stand-off attacks",
+                "Airstrikes": "indicating increased use of stand-off or aerial tactics",
+                "Explosions": "suggesting reliance on remote/IED-based attacks",
+                "Targeted Violence": "indicating selective engagements",
                 "Clashes": "direct engagements",
             }
-            interpretation = interpretation_map.get(event_type, "changing operational patterns")
-            tactical_bullet = f"{event_type} increased sharply ({pct_val:+.1%}), indicating {interpretation}"
+            interpretation = interpretation_map.get(
+                event_type,
+                "indicating a material change in tactical behavior",
+            )
+            tactical_bullet = f"{event_type} increased sharply ({pct_val:+.1%}), {interpretation}."
 
     if tactical_bullet is None:
-        tactical_bullet = "Operational patterns remained broadly stable without a dominant tactical shift"
+        tactical_bullet = (
+            "No event type increased above the tactical-shift threshold, which matters because no single tactic is driving the current picture."
+        )
 
     bullets.append(tactical_bullet)
 
     # 3) STATE RESPONSE BULLET
     if ct_pct < 0:
-        bullets.append(f"Security force operations declined ({ct_pct:.1f}%), reducing operational pressure")
+        bullets.append(
+            f"Security force operations declined ({ct_pct:.1f}%), which matters because reduced state pressure can create more room for militant maneuver."
+        )
     elif ct_pct > 0:
-        bullets.append(f"Security force operations increased (+{ct_pct:.1f}%), indicating heightened state response")
+        bullets.append(
+            f"Security force operations increased (+{ct_pct:.1f}%), which matters because state pressure is rising against the current threat environment."
+        )
     else:
-        bullets.append("Security force operations remained unchanged")
+        bullets.append(
+            "Security force operations were unchanged, which matters because the state response is not scaling with changes elsewhere in the environment."
+        )
 
     # 4) ACTIVITY BULLET
     if inc_pct < 0:
-        bullets.append(f"Overall activity declined marginally ({inc_pct:.1f}%), suggesting a slowdown despite evolving dynamics")
+        bullets.append(
+            f"Overall activity declined marginally ({inc_pct:.1f}%), which matters because the slowdown may mask tactical or geographic adaptation."
+        )
     else:
-        bullets.append(f"Overall activity increased ({inc_pct:.1f}%), indicating rising operational tempo")
+        bullets.append(
+            f"Overall activity increased ({inc_pct:.1f}%), which matters because rising tempo increases pressure on response capacity."
+        )
 
     # Render
     with st.container(border=True):
@@ -1105,6 +1216,34 @@ with actor_cols[2]:
         ">= 1 means aggressive state response",
         actor_metrics["ct_ratio"] - 1,
     )
+
+st.markdown("<div class='section-spacer'></div>", unsafe_allow_html=True)
+_section_title("Operational Activity Trends")
+trend_col1, trend_col2 = st.columns(2)
+
+with trend_col1:
+    militant_trend = _build_operational_trend_chart(
+        df_current,
+        df_prev,
+        windows,
+        "Militant Activity",
+        lambda frame: frame["actor_type"].fillna("").str.lower().eq("militant"),
+        "#1f3b57",
+        "#94a3b8",
+    )
+    st.plotly_chart(militant_trend, width="stretch")
+
+with trend_col2:
+    security_trend = _build_operational_trend_chart(
+        df_current,
+        df_prev,
+        windows,
+        "Security Operations",
+        lambda frame: frame["actor_type"].fillna("").str.lower().str.contains("security force", regex=False),
+        "#dc2626",
+        "#fca5a5",
+    )
+    st.plotly_chart(security_trend, width="stretch")
 
 st.markdown("<div class='section-spacer'></div>", unsafe_allow_html=True)
 _section_title("District Intelligence")
