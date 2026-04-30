@@ -542,22 +542,25 @@ def _render_key_takeaways(summary_metrics, expansion_analysis, tactical_shift, e
     # 2) TACTICAL BULLET
     tactical_bullet = None
     if not event_breakdown.empty:
+        tactical_candidates = event_breakdown.copy()
+        tactical_candidates["pct_change"] = pd.to_numeric(
+            tactical_candidates["pct_change"], errors="coerce"
+        )
+
         # pct_change is stored as a ratio, so 0.20 means +20%.
-        significant_events = event_breakdown[event_breakdown["pct_change"] > 0.20]
+        significant_events = tactical_candidates[tactical_candidates["pct_change"] > 0.20]
         if not significant_events.empty:
             top_event = significant_events.sort_values(by="pct_change", ascending=False).iloc[0]
-            event_type = top_event["event_type"]
+            event_type = str(top_event["event_type"]).strip()
             pct_val = top_event["pct_change"]
 
-            # Interpretation mapping
             interpretation_map = {
                 "Targeted Violence": "selective engagements",
-                "Clashes": "direct engagements",
                 "Explosions": "stand-off attacks",
-                "CT Ops": "heightened state response",
+                "Clashes": "direct engagements",
             }
             interpretation = interpretation_map.get(event_type, "changing operational patterns")
-            tactical_bullet = f"{event_type} increased sharply ({pct_val:+.1%}), indicating a shift toward {interpretation}"
+            tactical_bullet = f"{event_type} increased sharply ({pct_val:+.1%}), indicating {interpretation}"
 
     if tactical_bullet is None:
         tactical_bullet = "Operational patterns remained broadly stable without a dominant tactical shift"
