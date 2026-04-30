@@ -503,6 +503,13 @@ def generate_executive_summary(metrics, expansion, tactical):
     else:
         outlook = "Overall risk remains stable."
 
+    # Forward-looking intelligence: Outlook section (bulleted, bold heading)
+    outlook_bullets = [f"- {outlook}"]
+    if ct_ops_change < -30 and expansion["new_districts"] > 0:
+        outlook_bullets.append(
+            "- If current trends persist, reduced state pressure and continued expansion may enable further militant consolidation."
+        )
+
     summary_lines = [
         "EXECUTIVE ASSESSMENT",
         "",
@@ -512,7 +519,8 @@ def generate_executive_summary(metrics, expansion, tactical):
         tactical_line,
         synthesis,
         "",
-        outlook,
+        "𝐎𝐮𝐭𝐥𝐨𝐨𝐤",
+        *outlook_bullets,
     ]
 
     return "\n".join(summary_lines)

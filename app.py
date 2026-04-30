@@ -396,7 +396,7 @@ def _build_comparison_chart(dataframe, category_column, title):
             mode="lines+markers",
             name="Previous",
             line=dict(color="#16a34a", width=3, shape="spline"),
-            marker=dict(size=7, color="#16a34a"),
+            marker=dict(size=6, color="#16a34a"),
             hovertemplate="<b>%{x}</b><br>Previous: %{y}<extra></extra>",
         )
     )
@@ -407,7 +407,7 @@ def _build_comparison_chart(dataframe, category_column, title):
             mode="lines+markers",
             name="Current",
             line=dict(color="#1f3b57", width=3, shape="spline"),
-            marker=dict(size=8, color="#1f3b57"),
+            marker=dict(size=6, color="#1f3b57"),
             hovertemplate="<b>%{x}</b><br>Current: %{y}<extra></extra>",
         )
     )
@@ -420,7 +420,7 @@ def _build_comparison_chart(dataframe, category_column, title):
                 y=[ct_row["current"]],
                 mode="markers",
                 name="Security ops",
-                marker=dict(size=11, color="#dc2626", line=dict(width=1.5, color="#ffffff")),
+                marker=dict(size=6, color="#dc2626", line=dict(width=1, color="#ffffff")),
                 hovertemplate="<b>CT Ops</b><br>Security ops: %{y}<extra></extra>",
             )
         )
@@ -500,7 +500,7 @@ def _build_operational_trend_chart(
             mode="lines+markers",
             name="Previous week",
             line=dict(color=previous_color, width=3, shape="spline", dash="dash"),
-            marker=dict(size=7, color=previous_color),
+            marker=dict(size=6, color=previous_color),
             hovertemplate="<b>%{x}</b><br>Previous week: %{y}<extra></extra>",
         )
     )
@@ -511,7 +511,7 @@ def _build_operational_trend_chart(
             mode="lines+markers",
             name="Current week",
             line=dict(color=current_color, width=3, shape="spline"),
-            marker=dict(size=8, color=current_color),
+            marker=dict(size=6, color=current_color),
             hovertemplate="<b>%{x}</b><br>Current week: %{y}<extra></extra>",
         )
     )
