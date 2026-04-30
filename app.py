@@ -589,50 +589,50 @@ def _render_key_takeaways(summary_metrics, expansion_analysis, tactical_shift, e
 def _render_state_response_analysis(summary_metrics, actor_metrics):
     militant_incidents_current = actor_metrics["militant_incidents"]["current"]
     militant_incidents_prev = actor_metrics["militant_incidents"]["previous"]
-    security_force_current = actor_metrics["security_force_operations"]["current"]
-    security_force_prev = actor_metrics["security_force_operations"]["previous"]
+    security_ops_current = actor_metrics["security_force_operations"]["current"]
+    security_ops_prev = actor_metrics["security_force_operations"]["previous"]
     ct_ops_current = actor_metrics["ct_operations"]["current"]
     ct_ops_prev = actor_metrics["ct_operations"]["previous"]
 
     # STEP 1: Calculate metrics
-    ct_ratio_current = security_force_current / max(militant_incidents_current, 1)
-    ct_ratio_prev = security_force_prev / max(militant_incidents_prev, 1)
-    security_force_pct = ((security_force_current - security_force_prev) / max(security_force_prev, 1)) * 100
+    ct_ratio_current = security_ops_current / max(militant_incidents_current, 1)
+    ct_ratio_prev = security_ops_prev / max(militant_incidents_prev, 1)
+    security_ops_pct = ((security_ops_current - security_ops_prev) / max(security_ops_prev, 1)) * 100
     ct_pct = ((ct_ops_current - ct_ops_prev) / max(ct_ops_prev, 1)) * 100
     militant_pct = ((militant_incidents_current - militant_incidents_prev) / max(militant_incidents_prev, 1)) * 100
+    ratio_pct = ((ct_ratio_current - ct_ratio_prev) / max(ct_ratio_prev, 0.01)) * 100
 
     # STEP 2: Determine dominance
-    if ct_ratio_current >= 1:
-        dominance = "strong state response"
-    elif ct_ratio_current >= 0.5:
-        dominance = "balanced engagement"
+    if ct_ratio_current < 0.3:
+        dominance = "pronounced militant operational dominance"
+    elif ct_ratio_current <= 0.6:
+        dominance = "imbalanced engagement environment"
     else:
-        dominance = "militant operational dominance"
+        dominance = "strong state operational pressure"
 
     # STEP 3: Determine trend
-    if security_force_pct < -20:
-        trend = "declined significantly"
-    elif security_force_pct > 20:
-        trend = "increased significantly"
+    if ct_pct < -50:
+        pressure_signal = "sharp reduction in state pressure"
+    elif security_ops_pct < -20:
+        pressure_signal = "contracting state operational activity"
+    elif security_ops_pct > 20:
+        pressure_signal = "increased state operational activity"
     else:
-        trend = "remained relatively stable"
-
-    # STEP 4: Build implication
-    if dominance == "militant operational dominance":
-        implication = "reduced state pressure relative to insurgent activity"
-    elif dominance == "balanced engagement":
-        implication = "ongoing contestation between state and militant forces"
-    else:
-        implication = "increased state pressure on militant networks"
+        pressure_signal = "limited change in state operational activity"
 
     # Build interpretation paragraph
     interpretation_parts = [
-        f"Security force activity {trend} ({security_force_pct:+.1f}%), with CT operations changing by {ct_pct:+.1f}%.",
-        f"The security-force-to-militant ratio ({ct_ratio_current:.2f}) indicates {dominance}, suggesting {implication}.",
+        f"Security operations changed by {security_ops_pct:+.1f}% while militant incidents changed by {militant_pct:+.1f}%.",
+        f"The CT ratio stands at {ct_ratio_current:.2f}, indicating {dominance}.",
+        f"Targeted CT operations changed by {ct_pct:+.1f}%, signaling {pressure_signal}.",
     ]
 
-    if security_force_pct < -20:
-        interpretation_parts.append("This dynamic may enable further geographic expansion if sustained.")
+    if ct_ratio_current < 0.3:
+        interpretation_parts.append("Operational control is tilted toward militant initiative.")
+    elif ct_ratio_current <= 0.6:
+        interpretation_parts.append("Operational control remains contested but weighted against the state response.")
+    else:
+        interpretation_parts.append("Operational control shows material state pressure on the environment.")
 
     interpretation_text = " ".join(interpretation_parts)
 
@@ -643,24 +643,21 @@ def _render_state_response_analysis(summary_metrics, actor_metrics):
         # PART 1: TABLE
         import pandas as pd
         table_data = pd.DataFrame({
-            "Metric": ["Militant Incidents", "Security Force Operations", "CT Ops", "Security Force Ratio"],
+            "Metric": ["Militant Incidents", "Security Operations", "CT Ratio"],
             "Current": [
                 _format_number(militant_incidents_current),
-                _format_number(security_force_current),
-                _format_number(ct_ops_current),
+                _format_number(security_ops_current),
                 f"{ct_ratio_current:.2f}",
             ],
             "Previous": [
                 _format_number(militant_incidents_prev),
-                _format_number(security_force_prev),
-                _format_number(ct_ops_prev),
+                _format_number(security_ops_prev),
                 f"{ct_ratio_prev:.2f}",
             ],
             "Change": [
                 f"{militant_pct:+.1f}%",
-                f"{security_force_pct:+.1f}%",
-                f"{ct_pct:+.1f}%",
-                f"{((ct_ratio_current - ct_ratio_prev) / max(ct_ratio_prev, 0.01)) * 100:+.1f}%"
+                f"{security_ops_pct:+.1f}%",
+                f"{ratio_pct:+.1f}%",
             ]
         })
         st.dataframe(table_data, hide_index=True, width="stretch")
