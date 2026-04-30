@@ -6,8 +6,8 @@ APP_DIR = Path(__file__).resolve().parent
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
-import altair as alt
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 from analysis import (
@@ -384,36 +384,85 @@ def _build_comparison_chart(dataframe, category_column, title):
     if dataframe.empty:
         return None
 
-    chart_df = dataframe.melt(
-        id_vars=[category_column],
-        value_vars=["current", "previous"],
-        var_name="window",
-        value_name="incidents",
-    )
-    chart_df["window"] = chart_df["window"].map({"current": "Current", "previous": "Previous"})
-    sort_order = dataframe[category_column].tolist()
+    chart_df = dataframe.copy()
+    categories = chart_df[category_column].astype(str).tolist()
+    height = max(330, len(chart_df) * 30)
 
-    return (
-        alt.Chart(chart_df)
-        .mark_bar(size=17, cornerRadiusEnd=3)
-        .encode(
-            x=alt.X("incidents:Q", title="Incidents"),
-            y=alt.Y(f"{category_column}:N", sort=sort_order, title=None),
-            yOffset=alt.YOffset("window:N"),
-            color=alt.Color(
-                "window:N",
-                scale=alt.Scale(domain=["Current", "Previous"], range=["#0f766e", "#cbd2d9"]),
-                legend=alt.Legend(title=None, orient="top"),
-            ),
-            tooltip=[
-                alt.Tooltip(f"{category_column}:N", title=category_column.replace("_", " ").title()),
-                alt.Tooltip("window:N", title="Window"),
-                alt.Tooltip("incidents:Q", title="Incidents"),
-            ],
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=categories,
+            y=chart_df["previous"],
+            mode="lines+markers",
+            name="Previous",
+            line=dict(color="#16a34a", width=3, shape="spline"),
+            marker=dict(size=7, color="#16a34a"),
+            hovertemplate="<b>%{x}</b><br>Previous: %{y}<extra></extra>",
         )
-        .properties(height=max(330, len(dataframe) * 28), title=title)
-        .configure_view(strokeOpacity=0)
     )
+    fig.add_trace(
+        go.Scatter(
+            x=categories,
+            y=chart_df["current"],
+            mode="lines+markers",
+            name="Current",
+            line=dict(color="#1f3b57", width=3, shape="spline"),
+            marker=dict(size=8, color="#1f3b57"),
+            hovertemplate="<b>%{x}</b><br>Current: %{y}<extra></extra>",
+        )
+    )
+
+    if category_column == "event_type" and "CT Ops" in categories:
+        ct_row = chart_df[chart_df[category_column].astype(str).eq("CT Ops")].iloc[0]
+        fig.add_trace(
+            go.Scatter(
+                x=["CT Ops"],
+                y=[ct_row["current"]],
+                mode="markers",
+                name="Security ops",
+                marker=dict(size=11, color="#dc2626", line=dict(width=1.5, color="#ffffff")),
+                hovertemplate="<b>CT Ops</b><br>Security ops: %{y}<extra></extra>",
+            )
+        )
+
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=14, color="#102a43"), x=0, xanchor="left"),
+        height=height,
+        margin=dict(l=8, r=8, t=46, b=70),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Segoe UI, sans-serif", size=12, color="#334155"),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            font=dict(size=11, color="#64748b"),
+            bgcolor="rgba(0,0,0,0)",
+            borderwidth=0,
+        ),
+        hovermode="x unified",
+    )
+    fig.update_xaxes(
+        title=None,
+        tickfont=dict(size=10, color="#64748b"),
+        showgrid=False,
+        zeroline=False,
+        showline=False,
+        ticks="",
+        tickangle=-35,
+    )
+    fig.update_yaxes(
+        title=dict(text="Incidents", font=dict(size=11, color="#94a3b8")),
+        tickfont=dict(size=10, color="#64748b"),
+        gridcolor="#e5e7eb",
+        gridwidth=1,
+        zeroline=False,
+        showline=False,
+        ticks="",
+    )
+    return fig
 
 
 def _render_html_table(columns, rows, table_height=None):
@@ -1070,7 +1119,7 @@ with district_chart_col:
     if district_chart is None:
         st.info("No district activity found in the current comparison windows.")
     else:
-        st.altair_chart(district_chart, width="stretch")
+        st.plotly_chart(district_chart, width="stretch")
 
 with district_table_col:
     st.markdown("<div class='table-caption'>Analytical Table</div>", unsafe_allow_html=True)
@@ -1169,7 +1218,7 @@ with event_chart_col:
     if event_chart is None:
         st.info("No event data found in the comparison windows.")
     else:
-        st.altair_chart(event_chart, width="stretch")
+        st.plotly_chart(event_chart, width="stretch")
 
 with event_table_col:
     st.markdown("<div class='table-caption'>Analytical Table</div>", unsafe_allow_html=True)
