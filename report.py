@@ -147,9 +147,9 @@ def build_pdf_report(report_context):
         ],
         [
             "Security Force Operations",
-            report_context["actor_metrics"]["ct_operations"]["current"],
-            report_context["actor_metrics"]["ct_operations"]["previous"],
-            report_context["actor_metrics"]["ct_operations"]["delta"],
+            report_context["actor_metrics"]["security_force_operations"]["current"],
+            report_context["actor_metrics"]["security_force_operations"]["previous"],
+            report_context["actor_metrics"]["security_force_operations"]["delta"],
         ],
         ["CT Ratio", f"{report_context['actor_metrics']['ct_ratio']:.2f}", "-", report_context["actor_metrics"]["interpretation"]],
     ]
@@ -325,9 +325,9 @@ def _build_docx_with_python_docx(report_context):
             },
             {
                 "Metric": "Security Force Operations",
-                "Current": report_context["actor_metrics"]["ct_operations"]["current"],
-                "Previous": report_context["actor_metrics"]["ct_operations"]["previous"],
-                "Delta": report_context["actor_metrics"]["ct_operations"]["delta"],
+                "Current": report_context["actor_metrics"]["security_force_operations"]["current"],
+                "Previous": report_context["actor_metrics"]["security_force_operations"]["previous"],
+                "Delta": report_context["actor_metrics"]["security_force_operations"]["delta"],
             },
             {
                 "Metric": "CT Ratio",
@@ -589,9 +589,9 @@ def _build_docx_fallback(report_context):
             },
             {
                 "Metric": "Security Force Operations",
-                "Current": report_context["actor_metrics"]["ct_operations"]["current"],
-                "Previous": report_context["actor_metrics"]["ct_operations"]["previous"],
-                "Delta": report_context["actor_metrics"]["ct_operations"]["delta"],
+                "Current": report_context["actor_metrics"]["security_force_operations"]["current"],
+                "Previous": report_context["actor_metrics"]["security_force_operations"]["previous"],
+                "Delta": report_context["actor_metrics"]["security_force_operations"]["delta"],
             },
             {
                 "Metric": "CT Ratio",

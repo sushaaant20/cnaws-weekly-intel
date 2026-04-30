@@ -7,7 +7,7 @@ import streamlit as st
 
 load_dotenv()
 
-SHEET_CSV_URL = os.getenv("SHEET_CSV_URL") 
+SHEET_CSV_URL = os.getenv("SHEET_CSV_URL")
 
 COLUMN_ALIASES = {
     "date": ["Date", "Incident Date", "Event Date"],
@@ -97,5 +97,8 @@ def normalize_data(df):
 
 @st.cache_data(show_spinner=False)
 def load_data(url=SHEET_CSV_URL):
+    if not url:
+        raise ValueError("SHEET_CSV_URL is not configured. Add it to the .env file.")
+
     df = pd.read_csv(url)
     return normalize_data(df)

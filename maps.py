@@ -21,9 +21,11 @@ EVENT_COLOR_HEX = {
 ACTOR_OUTLINE_MAP = {
     "Militant": [15, 23, 42, 220],
     "Security Forces": [8, 47, 73, 220],
+    "Civilian": [100, 116, 139, 220],
+    "Other": [100, 116, 139, 220],
 }
 
-ACTOR_MARKER_MAP = {"Militant": "o", "Security Forces": "s"}
+ACTOR_MARKER_MAP = {"Militant": "o", "Security Forces": "s", "Civilian": "^", "Other": "^"}
 
 
 def _color_for_event(event_category):
@@ -32,6 +34,14 @@ def _color_for_event(event_category):
 
 def _hex_for_event(event_category):
     return EVENT_COLOR_HEX.get(event_category, "#64748b")
+
+
+def _hex_for_actor(actor_group):
+    if actor_group == "Militant":
+        return "#0f172a"
+    if actor_group == "Security Forces":
+        return "#164e63"
+    return "#475569"
 
 
 def build_map_view(map_data):
@@ -53,7 +63,8 @@ def build_map_view(map_data):
     )
 
     layers = []
-    for actor_group in ("Militant", "Security Forces"):
+    actor_groups = sorted(deck_df["actor_group"].dropna().unique())
+    for actor_group in actor_groups:
         actor_df = deck_df[deck_df["actor_group"] == actor_group]
         if actor_df.empty:
             continue
@@ -98,8 +109,8 @@ def build_map_view(map_data):
         if label in deck_df["event_category"].unique()
     ]
     actor_legend = [
-        {"label": label, "marker": "Circle" if label == "Militant" else "Square"}
-        for label in deck_df["actor_group"].unique()
+        {"label": label, "marker": "Circle" if label == "Militant" else "Square" if label == "Security Forces" else "Triangle"}
+        for label in actor_groups
     ]
     return deck, {"events": event_legend, "actors": actor_legend}
 
@@ -112,10 +123,13 @@ def build_map_image(map_data):
     fig.patch.set_facecolor("#ffffff")
     ax.set_facecolor("#f8fafc")
 
-    for actor_group, marker in ACTOR_MARKER_MAP.items():
+    actor_groups = sorted(map_data["actor_group"].dropna().unique())
+    for actor_group in actor_groups:
         actor_df = map_data[map_data["actor_group"] == actor_group]
         if actor_df.empty:
             continue
+        marker = ACTOR_MARKER_MAP.get(actor_group, "^")
+        edge_color = _hex_for_actor(actor_group)
 
         for event_category, group_df in actor_df.groupby("event_category"):
             ax.scatter(
@@ -124,7 +138,7 @@ def build_map_image(map_data):
                 s=(group_df["casualties_total"].clip(lower=0) * 55) + 70,
                 c=_hex_for_event(event_category),
                 marker=marker,
-                edgecolors="#0f172a" if actor_group == "Militant" else "#164e63",
+                edgecolors=edge_color,
                 linewidths=0.8,
                 alpha=0.85,
                 label=f"{event_category} | {actor_group}",

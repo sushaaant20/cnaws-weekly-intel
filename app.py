@@ -542,8 +542,8 @@ def _render_key_takeaways(summary_metrics, expansion_analysis, tactical_shift, e
     # 2) TACTICAL BULLET
     tactical_bullet = None
     if not event_breakdown.empty:
-        # Filter where % Change > 20
-        significant_events = event_breakdown[event_breakdown["pct_change"] > 20]
+        # pct_change is stored as a ratio, so 0.20 means +20%.
+        significant_events = event_breakdown[event_breakdown["pct_change"] > 0.20]
         if not significant_events.empty:
             top_event = significant_events.sort_values(by="pct_change", ascending=False).iloc[0]
             event_type = top_event["event_type"]
@@ -557,7 +557,7 @@ def _render_key_takeaways(summary_metrics, expansion_analysis, tactical_shift, e
                 "CT Ops": "heightened state response",
             }
             interpretation = interpretation_map.get(event_type, "changing operational patterns")
-            tactical_bullet = f"{event_type} increased sharply (+{pct_val:.1f}%), indicating a shift toward {interpretation}"
+            tactical_bullet = f"{event_type} increased sharply ({pct_val:+.1%}), indicating a shift toward {interpretation}"
 
     if tactical_bullet is None:
         tactical_bullet = "Operational patterns remained broadly stable without a dominant tactical shift"
@@ -582,20 +582,22 @@ def _render_key_takeaways(summary_metrics, expansion_analysis, tactical_shift, e
     with st.container(border=True):
         st.markdown("<div class='section-label'>KEY TAKEAWAYS</div>", unsafe_allow_html=True)
 
-        # Join bullets with double newline for spacing
-        bullets_html = "\n\n".join(f"• {bullet}" for bullet in bullets)
+        bullets_html = "\n\n".join(f"- {bullet}" for bullet in bullets)
         st.markdown(bullets_html)
 
 
 def _render_state_response_analysis(summary_metrics, actor_metrics):
-    militant_incidents_current = summary_metrics["incidents"]["current"]
-    militant_incidents_prev = summary_metrics["incidents"]["previous"]
+    militant_incidents_current = actor_metrics["militant_incidents"]["current"]
+    militant_incidents_prev = actor_metrics["militant_incidents"]["previous"]
+    security_force_current = actor_metrics["security_force_operations"]["current"]
+    security_force_prev = actor_metrics["security_force_operations"]["previous"]
     ct_ops_current = actor_metrics["ct_operations"]["current"]
     ct_ops_prev = actor_metrics["ct_operations"]["previous"]
 
     # STEP 1: Calculate metrics
-    ct_ratio_current = ct_ops_current / max(militant_incidents_current, 1)
-    ct_ratio_prev = ct_ops_prev / max(militant_incidents_prev, 1)
+    ct_ratio_current = security_force_current / max(militant_incidents_current, 1)
+    ct_ratio_prev = security_force_prev / max(militant_incidents_prev, 1)
+    security_force_pct = ((security_force_current - security_force_prev) / max(security_force_prev, 1)) * 100
     ct_pct = ((ct_ops_current - ct_ops_prev) / max(ct_ops_prev, 1)) * 100
     militant_pct = ((militant_incidents_current - militant_incidents_prev) / max(militant_incidents_prev, 1)) * 100
 
@@ -608,9 +610,9 @@ def _render_state_response_analysis(summary_metrics, actor_metrics):
         dominance = "militant operational dominance"
 
     # STEP 3: Determine trend
-    if ct_pct < -20:
+    if security_force_pct < -20:
         trend = "declined significantly"
-    elif ct_pct > 20:
+    elif security_force_pct > 20:
         trend = "increased significantly"
     else:
         trend = "remained relatively stable"
@@ -625,11 +627,11 @@ def _render_state_response_analysis(summary_metrics, actor_metrics):
 
     # Build interpretation paragraph
     interpretation_parts = [
-        f"Security force activity {trend}, with CT operations changing by {ct_pct:+.1f}%.",
-        f"The CT ratio ({ct_ratio_current:.1f}) indicates {dominance}, suggesting {implication}."
+        f"Security force activity {trend} ({security_force_pct:+.1f}%), with CT operations changing by {ct_pct:+.1f}%.",
+        f"The security-force-to-militant ratio ({ct_ratio_current:.2f}) indicates {dominance}, suggesting {implication}.",
     ]
 
-    if ct_pct < -20:
+    if security_force_pct < -20:
         interpretation_parts.append("This dynamic may enable further geographic expansion if sustained.")
 
     interpretation_text = " ".join(interpretation_parts)
@@ -641,24 +643,27 @@ def _render_state_response_analysis(summary_metrics, actor_metrics):
         # PART 1: TABLE
         import pandas as pd
         table_data = pd.DataFrame({
-            "Metric": ["Militant Incidents", "CT Operations", "CT Ratio"],
+            "Metric": ["Militant Incidents", "Security Force Operations", "CT Ops", "Security Force Ratio"],
             "Current": [
-                militant_incidents_current,
-                ct_ops_current,
-                f"{ct_ratio_current:.1f}"
+                _format_number(militant_incidents_current),
+                _format_number(security_force_current),
+                _format_number(ct_ops_current),
+                f"{ct_ratio_current:.2f}",
             ],
             "Previous": [
-                militant_incidents_prev,
-                ct_ops_prev,
-                f"{ct_ratio_prev:.1f}"
+                _format_number(militant_incidents_prev),
+                _format_number(security_force_prev),
+                _format_number(ct_ops_prev),
+                f"{ct_ratio_prev:.2f}",
             ],
             "Change": [
                 f"{militant_pct:+.1f}%",
+                f"{security_force_pct:+.1f}%",
                 f"{ct_pct:+.1f}%",
                 f"{((ct_ratio_current - ct_ratio_prev) / max(ct_ratio_prev, 0.01)) * 100:+.1f}%"
             ]
         })
-        st.dataframe(table_data, hide_index=True, use_container_width=True)
+        st.dataframe(table_data, hide_index=True, width="stretch")
 
         # PART 2: INTERPRETATION
         st.markdown(f"<div class='shift-text'>{interpretation_text}</div>", unsafe_allow_html=True)
@@ -668,21 +673,23 @@ def _render_map_legend():
     st.caption("Event Types")
     event_cols = st.columns(4)
     event_items = [
-        ("Clashes", "🔴"),
-        ("Explosions", "🟠"),
-        ("CT Ops", "🔵"),
-        ("Targeted Violence", "🟣"),
+        ("Clashes", "Red"),
+        ("Explosions", "Orange"),
+        ("CT Ops", "Blue"),
+        ("Targeted Violence", "Purple"),
     ]
     for column, (label, marker) in zip(event_cols, event_items):
         with column:
-            st.markdown(f"{marker} {label}")
+            st.markdown(f"**{marker}** {label}")
 
     st.caption("Actor Groups")
-    actor_cols = st.columns(2)
+    actor_cols = st.columns(3)
     with actor_cols[0]:
-        st.markdown("○ Militant")
+        st.markdown("Circle Militant")
     with actor_cols[1]:
-        st.markdown("□ Security Forces")
+        st.markdown("Square Security Forces")
+    with actor_cols[2]:
+        st.markdown("Triangle Other")
 
 
 def _build_report_context(
@@ -753,8 +760,8 @@ window_header = f"Rolling Window: {_window_span(windows['current'])} vs {_window
 
 executive_summary = generate_executive_summary(
     {
-        "inc_current": summary_metrics["incidents"]["current"],
-        "inc_prev": summary_metrics["incidents"]["previous"],
+        "inc_current": actor_metrics["militant_incidents"]["current"],
+        "inc_prev": actor_metrics["militant_incidents"]["previous"],
         "cas_current": summary_metrics["casualties"]["current"],
         "cas_prev": summary_metrics["casualties"]["previous"],
         "intensity_current": summary_metrics["intensity"]["current"],
@@ -808,7 +815,7 @@ with st.container(border=False):
                 pdf_bytes,
                 file_name="cnaws-weekly-intelligence.pdf",
                 mime="application/pdf",
-                use_container_width=True,
+                width="stretch",
             )
         with export_cols[1]:
             st.download_button(
@@ -816,7 +823,7 @@ with st.container(border=False):
                 docx_bytes,
                 file_name="cnaws-weekly-intelligence.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                use_container_width=True,
+                width="stretch",
             )
 
 # Horizontal divider
@@ -996,10 +1003,10 @@ with actor_cols[0]:
 with actor_cols[1]:
     _metric_card(
         "Security Force Operations",
-        _format_number(actor_metrics["ct_operations"]["current"]),
-        f"{actor_metrics['ct_operations']['delta']:+,} vs previous",
-        f"Previous: {_format_number(actor_metrics['ct_operations']['previous'])}",
-        actor_metrics["ct_operations"]["delta"],
+        _format_number(actor_metrics["security_force_operations"]["current"]),
+        f"{actor_metrics['security_force_operations']['delta']:+,} vs previous",
+        f"Previous: {_format_number(actor_metrics['security_force_operations']['previous'])}",
+        actor_metrics["security_force_operations"]["delta"],
     )
 with actor_cols[2]:
     _metric_card(

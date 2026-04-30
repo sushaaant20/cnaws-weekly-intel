@@ -104,13 +104,17 @@ def compute_actor_metrics(df_current, df_prev):
     current_event_types = _event_series(df_current)
     prev_event_types = _event_series(df_prev)
 
-    militant_current = int(df_current["actor_type"].fillna("").str.lower().eq("militant").sum())
-    militant_prev = int(df_prev["actor_type"].fillna("").str.lower().eq("militant").sum())
+    current_actor_types = df_current["actor_type"].fillna("").str.lower()
+    prev_actor_types = df_prev["actor_type"].fillna("").str.lower()
 
+    militant_current = int(current_actor_types.eq("militant").sum())
+    militant_prev = int(prev_actor_types.eq("militant").sum())
+    security_force_current = int(current_actor_types.str.contains("security force", regex=False).sum())
+    security_force_prev = int(prev_actor_types.str.contains("security force", regex=False).sum())
     ct_current = int(current_event_types.eq("CT Ops").sum())
     ct_prev = int(prev_event_types.eq("CT Ops").sum())
 
-    ct_ratio = round(_safe_divide(ct_current, max(militant_current, 1)) or 0.0, 2)
+    ct_ratio = round(_safe_divide(security_force_current, max(militant_current, 1)) or 0.0, 2)
     ct_change_pct = _pct_change_percent(ct_current, ct_prev)
 
     if ct_ratio >= 1:
@@ -120,6 +124,7 @@ def compute_actor_metrics(df_current, df_prev):
 
     return {
         "militant_incidents": _build_metric(militant_current, militant_prev),
+        "security_force_operations": _build_metric(security_force_current, security_force_prev),
         "ct_operations": _build_metric(ct_current, ct_prev),
         "ct_ratio": ct_ratio,
         "ct_ops_change_pct": ct_change_pct,
@@ -508,8 +513,15 @@ def prepare_map_data(df_current):
     map_df = df_current.dropna(subset=["latitude", "longitude"]).copy()
     map_df = map_df[map_df["latitude"].between(-90, 90) & map_df["longitude"].between(-180, 180)]
     map_df["event_category"] = map_df["event_type"].apply(categorize_event_type)
-    map_df["actor_group"] = map_df["event_category"].apply(
-        lambda value: "Security Forces" if value == "CT Ops" else "Militant"
+    actor_text = map_df["actor_type"].fillna("").str.lower()
+    map_df["actor_group"] = "Other"
+    map_df.loc[actor_text.eq("militant"), "actor_group"] = "Militant"
+    map_df.loc[
+        actor_text.str.contains("security force", regex=False) | map_df["event_category"].eq("CT Ops"),
+        "actor_group",
+    ] = "Security Forces"
+    map_df["actor_group"] = map_df["actor_group"].where(
+        map_df["actor_group"].ne("Other"), map_df["actor_type"].fillna("Other")
     )
     map_df["marker_size"] = map_df["casualties_total"].fillna(0).clip(lower=0) * 4200 + 14000
 
