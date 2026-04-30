@@ -388,81 +388,71 @@ def _build_comparison_chart(dataframe, category_column, title):
     categories = chart_df[category_column].astype(str).tolist()
     height = max(330, len(chart_df) * 30)
 
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=categories,
-            y=chart_df["previous"],
-            mode="lines+markers",
-            name="Previous",
-            line=dict(color="#16a34a", width=3, shape="spline"),
-            marker=dict(size=6, color="#16a34a"),
-            hovertemplate="<b>%{x}</b><br>Previous: %{y}<extra></extra>",
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=categories,
-            y=chart_df["current"],
-            mode="lines+markers",
-            name="Current",
-            line=dict(color="#1f3b57", width=3, shape="spline"),
-            marker=dict(size=6, color="#1f3b57"),
-            hovertemplate="<b>%{x}</b><br>Current: %{y}<extra></extra>",
-        )
-    )
-
-    if category_column == "event_type" and "CT Ops" in categories:
-        ct_row = chart_df[chart_df[category_column].astype(str).eq("CT Ops")].iloc[0]
+    # Use grouped bar chart for district and event_type comparisons
+    if category_column in ("district", "event_type"):
+        # Sort by current value descending for event types
+        if category_column == "event_type":
+            chart_df = chart_df.sort_values("current", ascending=False).reset_index(drop=True)
+            categories = chart_df[category_column].astype(str).tolist()
+        fig = go.Figure()
         fig.add_trace(
-            go.Scatter(
-                x=["CT Ops"],
-                y=[ct_row["current"]],
-                mode="markers",
-                name="Security ops",
-                marker=dict(size=6, color="#dc2626", line=dict(width=1, color="#ffffff")),
-                hovertemplate="<b>CT Ops</b><br>Security ops: %{y}<extra></extra>",
+            go.Bar(
+                x=categories,
+                y=chart_df["previous"],
+                name="Previous",
+                marker_color="#94a3b8",
+                hovertemplate="<b>%{x}</b><br>Previous: %{y}<extra></extra>",
             )
         )
-
-    fig.update_layout(
-        title=dict(text=title, font=dict(size=14, color="#102a43"), x=0, xanchor="left"),
-        height=height,
-        margin=dict(l=8, r=8, t=46, b=70),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Segoe UI, sans-serif", size=12, color="#334155"),
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1,
-            font=dict(size=11, color="#64748b"),
-            bgcolor="rgba(0,0,0,0)",
-            borderwidth=0,
-        ),
-        hovermode="x unified",
-    )
-    fig.update_xaxes(
-        title=None,
-        tickfont=dict(size=10, color="#64748b"),
-        showgrid=False,
-        zeroline=False,
-        showline=False,
-        ticks="",
-        tickangle=-35,
-    )
-    fig.update_yaxes(
-        title=dict(text="Incidents", font=dict(size=11, color="#94a3b8")),
-        tickfont=dict(size=10, color="#64748b"),
-        gridcolor="#e5e7eb",
-        gridwidth=1,
-        zeroline=False,
-        showline=False,
-        ticks="",
-    )
-    return fig
+        fig.add_trace(
+            go.Bar(
+                x=categories,
+                y=chart_df["current"],
+                name="Current",
+                marker_color="#1f3b57",
+                hovertemplate="<b>%{x}</b><br>Current: %{y}<extra></extra>",
+            )
+        )
+        fig.update_layout(
+            title=dict(text=title, font=dict(size=14, color="#102a43"), x=0, xanchor="left"),
+            height=height,
+            margin=dict(l=8, r=8, t=46, b=70),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="Segoe UI, sans-serif", size=12, color="#334155"),
+            barmode="group",
+            bargap=0.15,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1,
+                font=dict(size=11, color="#64748b"),
+                bgcolor="rgba(0,0,0,0)",
+                borderwidth=0,
+            ),
+            hovermode="x unified",
+        )
+        fig.update_xaxes(
+            title=None,
+            tickfont=dict(size=10, color="#64748b"),
+            showgrid=False,
+            zeroline=False,
+            showline=False,
+            ticks="",
+            tickangle=-35,
+        )
+        fig.update_yaxes(
+            title=dict(text="Incidents", font=dict(size=11, color="#94a3b8")),
+            tickfont=dict(size=10, color="#64748b"),
+            gridcolor="#e5e7eb",
+            gridwidth=1,
+            zeroline=False,
+            showline=False,
+            ticks="",
+        )
+        return fig
 
 
 def _daily_activity_counts(dataframe, window, mask):
