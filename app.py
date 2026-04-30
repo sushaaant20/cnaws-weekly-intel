@@ -898,29 +898,69 @@ def _kpi_card(icon_svg, title, value, change_text, subtext, delta_value=0):
     st.markdown(
         f"""
         <div style="
-            padding:16px;
-            border-radius:12px;
-            background:#f9fafb;
-            border:1px solid #eee;
+            padding:15px 16px;
+            border-radius:14px;
+            background:#ffffff;
+            border:1px solid #e5e7eb;
+            box-shadow:0 8px 18px rgba(15,23,42,0.035);
+            transition:background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+        " onmouseover="
+            this.style.background='#f9fafb';
+            this.style.boxShadow='0 12px 24px rgba(15,23,42,0.06)';
+            this.style.transform='translateY(-1px)';
+        " onmouseout="
+            this.style.background='#ffffff';
+            this.style.boxShadow='0 8px 18px rgba(15,23,42,0.035)';
+            this.style.transform='translateY(0)';
         ">
             <div style="
-                width:40px;
-                height:40px;
                 display:flex;
                 align-items:center;
-                justify-content:center;
-                background:#eef3f8;
-                border-radius:10px;
-                margin-bottom:10px;
+                gap:10px;
+                margin-bottom:8px;
             ">
-                {icon_svg}
+                <div style="
+                    width:36px;
+                    height:36px;
+                    min-width:36px;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    background:#eef3f8;
+                    border-radius:10px;
+                ">
+                    {icon_svg}
+                </div>
+                <div style="
+                    font-size:12px;
+                    line-height:1.2;
+                    color:#6b7280;
+                    font-weight:700;
+                    letter-spacing:0.05em;
+                    text-transform:uppercase;
+                ">{escape(title)}</div>
             </div>
-            <div style="font-size:12px; color:#6b7280; font-weight:600;">{escape(title)}</div>
-            <div style="font-size:28px; font-weight:600; color:#1f2937;">{escape(value)}</div>
-            <div style="font-size:12px; color:{change_color}; font-weight:600;">
+            <div style="
+                font-size:29px;
+                line-height:1.05;
+                font-weight:700;
+                color:#1f2937;
+                margin-bottom:5px;
+            ">{escape(value)}</div>
+            <div style="
+                font-size:12px;
+                line-height:1.25;
+                color:{change_color};
+                font-weight:700;
+                margin-bottom:3px;
+            ">
                 {escape(change_text)}
             </div>
-            <div style="font-size:11px; color:#9ca3af;">
+            <div style="
+                font-size:11px;
+                line-height:1.25;
+                color:#9ca3af;
+            ">
                 {escape(subtext)}
             </div>
         </div>
