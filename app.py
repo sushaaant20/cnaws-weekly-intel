@@ -25,10 +25,16 @@ from analysis import (
 from data import load_data
 from maps import build_map_image, build_map_view
 from processing import get_time_windows
-from report import build_docx_report, build_pdf_report
+from report import build_pdf_report
 
 
-st.set_page_config(page_title="CNAWS Weekly Intelligence Dashboard", layout="wide")
+REPORT_PERIOD_OPTIONS = {
+    "Weekly": "weekly",
+    "Fortnightly": "fortnightly",
+}
+
+
+st.set_page_config(page_title="CNAWS Intelligence Dashboard", layout="wide")
 
 
 def _inject_styles():
@@ -478,9 +484,9 @@ def _build_operational_trend_chart(
     current_color,
     previous_color,
 ):
-    day_labels = [f"Day {index}" for index in range(1, 8)]
     current_counts = _daily_activity_counts(df_current, windows["current"], mask)
     previous_counts = _daily_activity_counts(df_prev, windows["previous"], mask)
+    day_labels = [f"Day {index}" for index in range(1, len(current_counts) + 1)]
 
     fig = go.Figure()
     fig.add_trace(
@@ -488,10 +494,10 @@ def _build_operational_trend_chart(
             x=day_labels,
             y=previous_counts,
             mode="lines+markers",
-            name="Previous week",
+            name="Previous period",
             line=dict(color=previous_color, width=3, shape="spline", dash="dash"),
             marker=dict(size=6, color=previous_color),
-            hovertemplate="<b>%{x}</b><br>Previous week: %{y}<extra></extra>",
+            hovertemplate="<b>%{x}</b><br>Previous period: %{y}<extra></extra>",
         )
     )
     fig.add_trace(
@@ -499,10 +505,10 @@ def _build_operational_trend_chart(
             x=day_labels,
             y=current_counts,
             mode="lines+markers",
-            name="Current week",
+            name="Current period",
             line=dict(color=current_color, width=3, shape="spline"),
             marker=dict(size=6, color=current_color),
-            hovertemplate="<b>%{x}</b><br>Current week: %{y}<extra></extra>",
+            hovertemplate="<b>%{x}</b><br>Current period: %{y}<extra></extra>",
         )
     )
     fig.update_layout(
@@ -543,6 +549,32 @@ def _build_operational_trend_chart(
         rangemode="tozero",
     )
     return fig
+
+
+def _build_operational_trend_payload(df_current, df_prev, windows):
+    return {
+        "labels": [f"Day {index}" for index in range(1, len(_daily_activity_counts(df_current, windows["current"], lambda frame: frame["actor_type"].fillna("").str.lower().eq("militant"))) + 1)],
+        "militant_current": _daily_activity_counts(
+            df_current,
+            windows["current"],
+            lambda frame: frame["actor_type"].fillna("").str.lower().eq("militant"),
+        ),
+        "militant_previous": _daily_activity_counts(
+            df_prev,
+            windows["previous"],
+            lambda frame: frame["actor_type"].fillna("").str.lower().eq("militant"),
+        ),
+        "security_current": _daily_activity_counts(
+            df_current,
+            windows["current"],
+            lambda frame: frame["actor_type"].fillna("").str.lower().str.contains("security force", regex=False),
+        ),
+        "security_previous": _daily_activity_counts(
+            df_prev,
+            windows["previous"],
+            lambda frame: frame["actor_type"].fillna("").str.lower().str.contains("security force", regex=False),
+        ),
+    }
 
 
 def _render_html_table(columns, rows, table_height=None):
@@ -650,7 +682,7 @@ def _render_executive_summary(summary_text):
     )
 
 
-def _render_key_takeaways(summary_metrics, expansion_analysis, tactical_shift, event_breakdown, district_breakdown):
+def _build_key_takeaway_lines(summary_metrics, expansion_analysis, tactical_shift, event_breakdown):
     inc_current = summary_metrics["incidents"]["current"]
     inc_prev = summary_metrics["incidents"]["previous"]
     ct_ops_change = tactical_shift.get("ct_ops_change", 0)
@@ -731,7 +763,12 @@ def _render_key_takeaways(summary_metrics, expansion_analysis, tactical_shift, e
             f"Overall activity increased ({inc_pct:.1f}%), which matters because rising tempo increases pressure on response capacity."
         )
 
-    # Render
+    return bullets
+
+
+def _render_key_takeaways(summary_metrics, expansion_analysis, tactical_shift, event_breakdown, district_breakdown):
+    bullets = _build_key_takeaway_lines(summary_metrics, expansion_analysis, tactical_shift, event_breakdown)
+
     with st.container(border=True):
         st.markdown("<div class='section-label'>KEY TAKEAWAYS</div>", unsafe_allow_html=True)
 
@@ -843,7 +880,10 @@ def _render_map_legend():
 
 
 def _build_report_context(
+    report_title,
     window_header,
+    period_label,
+    reporting_period_label,
     summary_metrics,
     expansion_analysis,
     intelligence_score,
@@ -854,6 +894,9 @@ def _build_report_context(
     actor_metrics,
     executive_summary,
     map_image,
+    key_takeaways,
+    trend_payload,
+    incident_table,
 ):
     metric_cards = [
         ("Incidents", summary_metrics["incidents"]),
@@ -871,7 +914,11 @@ def _build_report_context(
     ]
 
     return {
+        "report_title": report_title,
         "window_header": window_header,
+        "period_label": period_label,
+        "reporting_period_label": reporting_period_label,
+        "summary_metrics": summary_metrics,
         "metric_cards": metric_cards,
         "expansion_analysis": expansion_analysis,
         "intelligence_score": intelligence_score,
@@ -882,6 +929,9 @@ def _build_report_context(
         "actor_metrics": actor_metrics,
         "executive_summary": executive_summary,
         "map_image": map_image,
+        "key_takeaways": key_takeaways,
+        "trend_payload": trend_payload,
+        "incident_table": incident_table,
     }
 
 
@@ -893,7 +943,10 @@ except Exception as exc:
     st.error(f"Unable to load the source data: {exc}")
     st.stop()
 
-df_current, df_prev, windows = get_time_windows(df)
+selected_period_label = st.session_state.get("report_period", "Weekly")
+selected_period_key = REPORT_PERIOD_OPTIONS.get(selected_period_label, "weekly")
+
+df_current, df_prev, windows = get_time_windows(df, period=selected_period_key)
 
 summary_metrics = compute_summary_metrics(df_current, df_prev)
 district_breakdown = compute_district_breakdown(df_current, df_prev)
@@ -905,8 +958,19 @@ intelligence_score = compute_intelligence_score(summary_metrics, expansion_analy
 map_data = prepare_map_data(df_current)
 high_impact_incidents = compute_high_impact_incidents(df_current)
 map_image = build_map_image(map_data)
+key_takeaways = _build_key_takeaway_lines(summary_metrics, expansion_analysis, tactical_shift, event_breakdown)
+trend_payload = _build_operational_trend_payload(df_current, df_prev, windows)
+incident_table = (
+    map_data.loc[:, ["date", "district", "event_category", "casualties_total"]]
+    .rename(columns={"event_category": "event_type", "casualties_total": "casualties"})
+    .copy()
+)
 
-window_header = f"Rolling Window: {_window_span(windows['current'])} vs {_window_span(windows['previous'])}"
+dashboard_title = f"CNAWS {windows['period_label']} Intelligence Dashboard"
+window_header = (
+    f"{windows['comparison_label']}: "
+    f"{_window_span(windows['current'])} vs {_window_span(windows['previous'])}"
+)
 
 executive_summary = generate_executive_summary(
     {
@@ -923,7 +987,10 @@ executive_summary = generate_executive_summary(
 )
 
 report_context = _build_report_context(
+    dashboard_title,
     window_header,
+    windows["period_label"],
+    windows["current"]["label"],
     summary_metrics,
     expansion_analysis,
     intelligence_score,
@@ -934,10 +1001,13 @@ report_context = _build_report_context(
     actor_metrics,
     executive_summary,
     map_image,
+    key_takeaways,
+    trend_payload,
+    incident_table,
 )
 
 pdf_bytes = build_pdf_report(report_context)
-docx_bytes = build_docx_report(report_context)
+export_slug = windows["period_key"]
 
 # ============================================================
 # SECTION 1: HEADER REDESIGN
@@ -953,28 +1023,30 @@ with st.container(border=False):
 
     with header_col2:
         st.markdown(
-            "<h2 style='text-align:center;margin:0;color:#102a43;'>CNAWS Weekly Intelligence Dashboard</h2>",
+            f"<h2 style='text-align:center;margin:0;color:#102a43;'>{escape(dashboard_title)}</h2>",
             unsafe_allow_html=True,
+        )
+        st.radio(
+            "Reporting Period",
+            options=list(REPORT_PERIOD_OPTIONS.keys()),
+            key="report_period",
+            horizontal=True,
+            label_visibility="collapsed",
         )
 
     with header_col3:
-        export_cols = st.columns(2)
-        with export_cols[0]:
-            st.download_button(
-                "Export PDF",
-                pdf_bytes,
-                file_name="cnaws-weekly-intelligence.pdf",
-                mime="application/pdf",
-                width="stretch",
-            )
-        with export_cols[1]:
-            st.download_button(
-                "Export DOCX",
-                docx_bytes,
-                file_name="cnaws-weekly-intelligence.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                width="stretch",
-            )
+        brief_filename = (
+            "CNAWS_Weekly_Intelligence_Brief.pdf"
+            if export_slug == "weekly"
+            else "CNAWS_Fortnightly_Intelligence_Brief.pdf"
+        )
+        st.download_button(
+            "Download Intelligence Brief",
+            pdf_bytes,
+            file_name=brief_filename,
+            mime="application/pdf",
+            width="stretch",
+        )
 
 # Horizontal divider
 st.markdown("""
